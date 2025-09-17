@@ -1,4 +1,5 @@
 ﻿using BattleShipLibrary;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -7,8 +8,8 @@ namespace BattleShip_Serveur
 {
     public class Program
     {
-        //Serveur
-        static bool ConditionFin;
+        private const int PORT = 22222;
+        private static bool _rematch = true;
 
         static void Main(string[] args)
         {
@@ -18,7 +19,7 @@ namespace BattleShip_Serveur
         public static void AttenteClient()
         {
             IPAddress ipAdress = IPAddress.Any;
-            IPEndPoint endPoint = new IPEndPoint(ipAdress, 22222);
+            IPEndPoint endPoint = new IPEndPoint(ipAdress, PORT);
 
             Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
@@ -30,18 +31,15 @@ namespace BattleShip_Serveur
                 while (true)
                 {
                     Console.Clear();
-                    WriteWaiting("En attente d'une connexion ...");
+                    WriteWaiting("En attente d'une connexion...");
 
-                    Socket handler = listener.Accept();
-                    ConditionFin = false;
+                    using Socket handler = listener.Accept();
+                    WriteSuccessful("Client connecté !");
 
-                    try
+                    _rematch = true;
+                    while (_rematch)
                     {
                         JouerPartie(handler);
-                    }
-                    catch (Exception ex)
-                    {
-                        WriteWarning($"Erreur durant la partie : {ex.Message}");
                     }
                 }
             }
@@ -51,126 +49,99 @@ namespace BattleShip_Serveur
             }
         }
 
-        public static void JouerPartie(Socket handler)
+        public static void JouerPartie(Socket socket)
         {
-            Console.Clear();
-            WriteSuccessful("Client connecté!");
+            int hits = 0;
+            bool win = false;
 
-            while (!ConditionFin)
+            BattleShip partie = new BattleShip();
+            partie.StartGame();
+
+            while (!win)
             {
-                BattleShip partie = new BattleShip();
-                partie.StartGame();
+                // --- Tour de l’adversaire ---
+                string coordRecus = partie.DeserializeStringData(RecevoirMessage(socket));
+                EnvoyerMessage(socket, partie.IsTouched(coordRecus));
 
-                int hits = 0;
-                bool win = false;
-
-                while (!win)
+                string confirmation = partie.DeserializeStringData(RecevoirMessage(socket));
+                if (confirmation != "1")
                 {
-                    // Tour de l’adversaire
-                    string coordRecu = partie.DeserializeStringData(RecevoirMessage(handler));
-                    string resultat = partie.IsTouched(coordRecu);
-                    EnvoyerMessage(handler, resultat);
+                    win = true;
+                    WriteWarning("Vous avez perdu !");
+                }
+                else
+                {
+                    // --- Tour du serveur ---
+                    string coords = partie.ChoisirCase("Case à toucher : ");
+                    EnvoyerMessage(socket, partie.SerializeData(coords));
 
-                    string ack = partie.DeserializeStringData(RecevoirMessage(handler));
-                    if (ack != "1")
+                    bool touche = partie.DeserializeBoolData(RecevoirMessage(socket));
+
+                    var (col, row) = partie.Positions[coords];
+                    if (touche)
                     {
-                        win = true;
-                        WriteWarning("Vous avez perdu :`(");
+                        partie.EnemyGrille[col, row] = "X";
+                        hits++;
+                        WriteSuccessful("Bateau touché !");
                     }
                     else
                     {
-                        // Tour du serveur
-                        string coords = partie.ChoisirCase("Case à toucher : ");
-                        EnvoyerMessage(handler, partie.SerializeData(coords));
-
-                        bool touche = partie.DeserializeBoolData(RecevoirMessage(handler));
-                        var (col, row) = partie.Positions[coords];
-
-                        if (touche)
-                        {
-                            partie.EnemyGrille[col, row] = "X";
-                            hits++;
-                            WriteSuccessful("Bateau touché!");
-                        }
-                        else
-                        {
-                            partie.EnemyGrille[col, row] = "-";
-                            WriteWaiting("Bateau non touché.");
-                        }
-
-                        partie.AfficherMaGrille();
-                        partie.AfficherEnemyGrille();
-
-                        if (hits == 2)
-                        {
-                            EnvoyerMessage(handler, partie.SerializeData("0"));
-                            win = true;
-                            WriteSuccessful("Vous avez gagné!");
-                        }
-                        else
-                        {
-                            EnvoyerMessage(handler, partie.SerializeData("1"));
-                        }
+                        partie.EnemyGrille[col, row] = "O";
+                        WriteWaiting("Bateau non touché");
                     }
-                }
 
-                if (DemanderRejouer(partie, handler) == "n")
-                {
-                    Console.WriteLine("Le client ne veut pas rejouer. Appuyez sur Entrée pour vous remettre en attente");
-                    Console.ReadKey();
-                    ConditionFin = true;
+                    partie.AfficherMaGrille();
+                    partie.AfficherEnemyGrille();
+
+                    if (hits == 2)
+                    {
+                        EnvoyerMessage(socket, partie.SerializeData("0"));
+                        WriteSuccessful("Vous avez gagné !");
+                        win = true;
+                    }
+                    else EnvoyerMessage(socket, partie.SerializeData("1"));
                 }
+            }
+
+            string rejouer = partie.DeserializeStringData(RecevoirMessage(socket));
+            if (rejouer == "o")
+            {
+                _rematch = true;
+                Console.Clear();
+            }
+            else
+            {
+                _rematch = false;
+                Console.WriteLine("Le client ne veut pas rejouer. Appuyez sur Entrée pour vous remettre en attente");
+                Console.ReadKey();
             }
         }
 
-        public static string DemanderRejouer(BattleShip partie, Socket handler)
+        #region Communication Réseau
+        private static void EnvoyerMessage(Socket socket, string data)
         {
-            WriteWaiting("Envoie de la demande de rematch au client. Veuillez patienter...");
-            EnvoyerMessage(handler, partie.SerializeData("Voulez-vous rejouer une partie (o/n)"));
-            return partie.DeserializeStringData(RecevoirMessage(handler));
+            string message = data + "?";
+            byte[] msg = Encoding.ASCII.GetBytes(message);
+            socket.Send(msg, SocketFlags.None);
         }
 
-        #region Méthodes Réseau
-        private static string RecevoirMessage(Socket handler)
+        private static string RecevoirMessage(Socket socket)
         {
             byte[] buffer = new byte[100];
-            int bytesRec = handler.Receive(buffer);
-
+            int bytesRec = socket.Receive(buffer);
             string data = Encoding.ASCII.GetString(buffer, 0, bytesRec);
-            return CleanData(data);
-        }
-
-        private static void EnvoyerMessage(Socket handler, string message)
-        {
-            message += "?";
-            byte[] msg = Encoding.ASCII.GetBytes(message);
-            handler.Send(msg, SocketFlags.None);
-        }
-
-        private static string CleanData(string data)
-        {
             return data.Contains("?") ? data.Substring(0, data.IndexOf("?")) : data;
         }
         #endregion
 
-        #region Modificateur de texte
-        public static void WriteWarning(string text)
-        {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine(text);
-            Console.ResetColor();
-        }
+        #region Affichage Console
+        private static void WriteWarning(string text) => WriteColored(text, ConsoleColor.Red);
+        private static void WriteSuccessful(string text) => WriteColored(text, ConsoleColor.Green);
+        private static void WriteWaiting(string text) => WriteColored(text, ConsoleColor.Yellow);
 
-        public static void WriteSuccessful(string text)
+        private static void WriteColored(string text, ConsoleColor color)
         {
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine(text);
-            Console.ResetColor();
-        }
-
-        public static void WriteWaiting(string text)
-        {
-            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.ForegroundColor = color;
             Console.WriteLine(text);
             Console.ResetColor();
         }

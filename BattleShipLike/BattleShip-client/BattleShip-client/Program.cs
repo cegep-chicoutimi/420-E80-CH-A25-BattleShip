@@ -21,76 +21,6 @@ namespace BattleShip_client
             DemandeInfoServeur();
         }
 
-        public static void DemandeInfoServeur()
-        {
-            do
-            {
-                Console.Write("Entrer l'adresse où vous connecter : ");
-                string saisie = Console.ReadLine() ?? "";
-
-                if (!ValiderAdresseIp(saisie))
-                    WriteWarning("Adresse IP invalide.");
-                else
-                    _adresseValide = true;
-
-            } while (!_adresseValide);
-
-            Console.Clear();
-            WriteWaiting($"Connexion à l'adresse {_adresseIp} en cours...");
-
-            try
-            {
-                IPAddress ipAddress = IPAddress.Parse(_adresseIp);
-                IPEndPoint remoteEP = new IPEndPoint(ipAddress, PORT);
-
-                using Socket sender = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                ConnexionServeur(sender, remoteEP);
-            }
-            catch (Exception e)
-            {
-                WriteWarning(e.Message);
-            }
-
-        }
-
-        public static void ConnexionServeur(Socket socket, IPEndPoint endPoint)
-        {
-            try
-            {
-                socket.Connect(endPoint);
-                WriteSuccessful("Connecté au serveur !");
-                JouerPartie(socket);
-            }
-            catch (ArgumentNullException ane)
-            {
-                WriteWarning($"Exception d'argument null : {ane.Message}");
-            }
-            catch (SocketException se)
-            {
-                WriteWarning($"Exception de Socket : {se.Message}");
-            }
-            catch (Exception e)
-            {
-                WriteWarning($"Exception inattendue : {e.Message}");
-            }
-
-            socket.Shutdown(SocketShutdown.Both);
-            socket.Close();
-        }
-
-        public static bool ValiderAdresseIp(string adresse)
-        {
-            if (string.IsNullOrWhiteSpace(adresse)) return false;
-
-            string[] splitValues = adresse.Split('.');
-            if (splitValues.Length != 4) return false;
-
-            bool valide = splitValues.All(part => byte.TryParse(part, out _));
-            if (valide) _adresseIp = adresse;
-
-            return valide;
-        }
-
         public static void JouerPartie(Socket sender)
         {
             while (_rematch)
@@ -165,7 +95,78 @@ namespace BattleShip_client
                 Console.Clear();
             }
         }
+
         #region Communication Réseau
+        public static void DemandeInfoServeur()
+        {
+            do
+            {
+                Console.Write("Entrer l'adresse où vous connecter : ");
+                string saisie = Console.ReadLine() ?? "";
+
+                if (!ValiderAdresseIp(saisie))
+                    WriteWarning("Adresse IP invalide.");
+                else
+                    _adresseValide = true;
+
+            } while (!_adresseValide);
+
+            Console.Clear();
+            WriteWaiting($"Connexion à l'adresse {_adresseIp} en cours...");
+
+            try
+            {
+                IPAddress ipAddress = IPAddress.Parse(_adresseIp);
+                IPEndPoint remoteEP = new IPEndPoint(ipAddress, PORT);
+
+                using Socket sender = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                ConnexionServeur(sender, remoteEP);
+            }
+            catch (Exception e)
+            {
+                WriteWarning(e.Message);
+            }
+
+        }
+
+        public static void ConnexionServeur(Socket socket, IPEndPoint endPoint)
+        {
+            try
+            {
+                socket.Connect(endPoint);
+                WriteSuccessful("Connecté au serveur !");
+                JouerPartie(socket);
+            }
+            catch (ArgumentNullException ane)
+            {
+                WriteWarning($"Exception d'argument null : {ane.Message}");
+            }
+            catch (SocketException se)
+            {
+                WriteWarning($"Exception de Socket : {se.Message}");
+            }
+            catch (Exception e)
+            {
+                WriteWarning($"Exception inattendue : {e.Message}");
+            }
+
+            socket.Shutdown(SocketShutdown.Both);
+            socket.Close();
+        }
+
+        public static bool ValiderAdresseIp(string adresse)
+        {
+            if (string.IsNullOrWhiteSpace(adresse)) return false;
+
+            string[] splitValues = adresse.Split('.');
+            if (splitValues.Length != 4) return false;
+
+            bool valide = splitValues.All(part => byte.TryParse(part, out _));
+            if (valide) _adresseIp = adresse;
+
+            return valide;
+        }
+
         private static void EnvoyerMessage(Socket socket, string data)
         {
             string message = data + "?";
@@ -186,7 +187,6 @@ namespace BattleShip_client
         private static void WriteWarning(string text) => WriteColored(text, ConsoleColor.Red);
         private static void WriteSuccessful(string text) => WriteColored(text, ConsoleColor.Green);
         private static void WriteWaiting(string text) => WriteColored(text, ConsoleColor.Yellow);
-
         private static void WriteColored(string text, ConsoleColor color)
         {
             Console.ForegroundColor = color;
