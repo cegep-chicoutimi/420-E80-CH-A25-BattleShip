@@ -23,8 +23,8 @@ namespace BattleShipLibrary
             Colonnes = c;
             bool isSecondCaseValid = false;
 
-            MaGrille = new string[Lignes, Colonnes];
-            EnemyGrille = new string[Lignes, Colonnes];
+            MaGrille = new string[Colonnes, Lignes];
+            EnemyGrille = new string[Colonnes, Lignes];
 
             RemplirGrilles();
 

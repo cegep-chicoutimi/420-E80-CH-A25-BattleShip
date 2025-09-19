@@ -30,8 +30,8 @@ namespace BattleShip_client
             {
                 Console.WriteLine(p);
                 isValid = int.TryParse(Console.ReadLine(), out n);
-                if (!isValid || n > 26) Console.WriteLine("Ce nombre n'est pas correct !");
-            } while (!isValid || n > 26);
+                if (!isValid || n > 12) Console.WriteLine("Ce nombre n'est pas correct !");
+            } while (!isValid || n > 12);
 
             return n;
         }
