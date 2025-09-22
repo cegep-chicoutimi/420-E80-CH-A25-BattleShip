@@ -1,99 +1,91 @@
-﻿using System.Reflection;
-using System.Runtime.InteropServices;
+﻿using System;
 using System.Text.Json;
 
 namespace BattleShipLibrary
 {
     public class BattleShip
     {
-        private int Colonnes { get; set; } = 4;
-        private int Lignes { get; set; } = 4;
+        private int Colonnes;
+        private int Lignes;
 
-        private string[,] MaGrille;
+        public string[,] MaGrille;
         public string[,] EnemyGrille;
 
-        private string FirstShipCase;
-        private string SecondShipCase;
+        public List<Bateau> MesBateaux = new();
 
-        public Dictionary<String, (int, int)> Positions = new Dictionary<string, (int, int)>();
-        public void StartGame()
+        public Dictionary<string, (int, int)> Positions = new();
+
+        public ConsoleColor CouleurJoueur { get; set; } = ConsoleColor.Green;   // Par défaut
+        public ConsoleColor CouleurServeur { get; set; } = ConsoleColor.Yellow; // Par défaut
+
+        public void StartGame(int c, int l)
         {
-            bool isSecondCaseValid = false;
+            Colonnes = c;
+            Lignes = l;
 
-            //Colonnes = SaisieTaille("Combien de colonnes ? ");
-            //Lignes = SaisieTaille("Combien de lignes ? ");
-
-            MaGrille = new string[Lignes, Colonnes];
-            EnemyGrille = new string[Lignes, Colonnes];
+            MaGrille = new string[Colonnes, Lignes];
+            EnemyGrille = new string[Colonnes, Lignes];
 
             RemplirGrilles();
 
-            AfficherMaGrille();
-
-            FirstShipCase = ChoisirCase("Première case du bateau ?");
-
-            do
+            // Initialiser bateaux avec formes pré-cannées
+            MesBateaux = new List<Bateau>
             {
-                SecondShipCase = ChoisirCase("Deuxième case du bateau ? ");
+                new Bateau(new List<(int,int)> { (0,0), (1,0), (0,1) }), // L
+                new Bateau(new List<(int,int)> { (0,0), (-1,1), (0,1), (1,1) }), // T
+                new Bateau(new List<(int,int)> { (0,0), (1,0), (0,1), (1,1) }) // carré 2x2
+            };
 
-                var (col1, row1) = Positions[FirstShipCase];
-                var (col2, row2) = Positions[SecondShipCase];
-
-                // Différences entre les coordonnées
-                int diffCol = Math.Abs(col1 - col2);
-                int diffRow = Math.Abs(row1 - row2);
-
-                // Adjacent si différence 1 dans une direction et 0 dans l'autre
-                if ((diffCol == 1 && diffRow == 0) || (diffCol == 0 && diffRow == 1))
+            // Pour chaque bateau, demander la position à l'utilisateur
+            foreach (var bateau in MesBateaux)
+            {
+                bool placé = false;
+                do
                 {
-                    isSecondCaseValid = true;
-                    MaGrille[col1, row1] = "B";
-                    MaGrille[col2, row2] = "B";
-                }
-            }while (!isSecondCaseValid);
+                    string pos = ChoisirCase($"Choisissez la case d'ancrage pour votre bateau de taille {bateau.Forme.Count} :");
+                    var (col, row) = Positions[pos];
 
-            AfficherMaGrille();
-            AfficherEnemyGrille();
+                    if (!bateau.Placer(col, row, Colonnes, Lignes))
+                    {
+                        Console.WriteLine("Bateau ne rentre pas dans la grille à cette position, choisissez-en une autre.");
+                        continue;
+                    }
+
+                    // Vérifier qu’il n’y a pas de chevauchement avec bateaux déjà placés
+                    if (MesBateaux.Any(b => b != bateau && b.Positions.Any(p => bateau.Positions.Contains(p))))
+                    {
+                        Console.WriteLine("Chevauchement détecté avec un autre bateau, choisissez une autre position.");
+                        continue;
+                    }
+
+                    // Placer dans la grille
+                    foreach (var (x, y) in bateau.Positions)
+                    {
+                        MaGrille[x, y] = "B";
+                    }
+                    placé = true;
+
+                    AfficherMaGrille();
+
+                } while (!placé);
+            }
         }
 
         public void AfficherMaGrille()
         {
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("\nMA GRILLE");
-            Console.ResetColor();
-            // Colonnes
-            for (int col = 0; col < Colonnes; col++)
-            {
-                char lettreColonne = (char)('A' + col);
-                Console.Write($"   {lettreColonne}");
-            }
-            Console.WriteLine();
-
-            // Lignes
-            for (int row = 0; row < Lignes; row++)
-            {
-                Console.Write(row + 1 < 10 ? $" {row + 1} " : $"{row + 1} ");
-
-                for (int col = 0; col < Colonnes; col++)
-                {
-                    char lettreColonne = (char)('A' + col);
-                    string cle = $"{lettreColonne}{row + 1}";
-                    var val = Positions[cle];
-
-                    Console.Write($"{MaGrille[col, row]}   ");
-                }
-
-                Console.WriteLine(); // Fin de ligne
-            }
-
+            AfficherGrille(MaGrille, CouleurJoueur);
         }
+
         public void AfficherEnemyGrille()
         {
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("\nGRILLE ENNEMIE");
-            Console.ResetColor();
+            AfficherGrille(EnemyGrille, CouleurServeur);
+        }
 
-            // Colonnes
+        private void AfficherGrille(string[,] grille, ConsoleColor couleur)
+        {
+            Console.ForegroundColor = couleur;
+
+            // En-tête des colonnes
             for (int col = 0; col < Colonnes; col++)
             {
                 char lettreColonne = (char)('A' + col);
@@ -101,87 +93,82 @@ namespace BattleShipLibrary
             }
             Console.WriteLine();
 
-            // Lignes
             for (int row = 0; row < Lignes; row++)
             {
                 Console.Write(row + 1 < 10 ? $" {row + 1} " : $"{row + 1} ");
 
                 for (int col = 0; col < Colonnes; col++)
                 {
-                    char lettreColonne = (char)('A' + col);
-                    string cle = $"{lettreColonne}{row + 1}";
-                    var val = Positions[cle];
-
-                    Console.Write($"{EnemyGrille[col, row]}   ");
+                    Console.Write($"{grille[col, row]}   ");
                 }
 
-                Console.WriteLine(); // Fin de ligne
+                Console.WriteLine();
             }
+
+            Console.ResetColor();
         }
-        public string ChoisirCase(string p)
+
+        public string ChoisirCase(string prompt)
         {
             string c;
             do
             {
-                Console.WriteLine(p);
-                c = Console.ReadLine().ToUpper();
-            } while (!Positions.ContainsKey(c));
+                Console.WriteLine(prompt);
+                c = Console.ReadLine()?.ToUpper();
+            } while (string.IsNullOrWhiteSpace(c) || !Positions.ContainsKey(c));
 
             return c;
         }
-        private int SaisieTaille(string p)
-        {
-            bool isValid = false;
-            int n;
 
-            do
-            {
-                Console.WriteLine(p);
-                isValid = int.TryParse(Console.ReadLine(), out n);
-                if (!isValid||n>26) Console.WriteLine("Ce nombre n'est pas correct !");
-            } while (!isValid||n>26);
-
-            return n;
-        }
         public string IsTouched(string pos)
         {
             var (col, row) = Positions[pos];
 
-            if (MaGrille[col, row] == "B") return SerializeData(true);
-            else return SerializeData(false);
+            bool touché = MesBateaux.Any(b => b.Positions.Contains((col, row)));
+            return SerializeData(touché);
         }
+
         public void RemplirGrilles()
         {
+            Positions.Clear();
+
             for (int col = 0; col < Colonnes; col++)
             {
                 char lettre = (char)('A' + col);
 
                 for (int row = 0; row < Lignes; row++)
                 {
-                    Positions.Add($"{lettre}{row + 1}", (col, row));
+                    string key = $"{lettre}{row + 1}";
+                    Positions[key] = (col, row);
 
                     MaGrille[col, row] = "~";
                     EnemyGrille[col, row] = "~";
                 }
             }
         }
+
+        #region Sérialisation
         public string SerializeData(bool data)
         {
-            JsonSerializerOptions options = new JsonSerializerOptions { WriteIndented = true};
+            JsonSerializerOptions options = new JsonSerializerOptions { WriteIndented = true };
             return JsonSerializer.Serialize(data, options);
         }
+
         public string SerializeData(string data)
         {
             JsonSerializerOptions options = new JsonSerializerOptions { WriteIndented = true };
             return JsonSerializer.Serialize(data, options);
         }
+
         public bool DeserializeBoolData(string jsonFile)
         {
             return JsonSerializer.Deserialize<bool>(jsonFile);
         }
+
         public string DeserializeStringData(string jsonFile)
         {
             return JsonSerializer.Deserialize<string>(jsonFile);
         }
+        #endregion
     }
 }
