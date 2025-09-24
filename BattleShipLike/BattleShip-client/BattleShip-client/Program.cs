@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 
 namespace BattleShip_client
@@ -17,6 +18,8 @@ namespace BattleShip_client
 
         static ConsoleColor couleurJoueur;
         static ConsoleColor couleurServeur;
+
+        static int nbTotalCases = 11;
 
         static void Main(string[] args)
         {
@@ -96,7 +99,6 @@ namespace BattleShip_client
                 int hits = 0;
 
                 BattleShip partie = new BattleShip();
-                int nbTotalCases = 11;
                 partie.CouleurJoueur = couleurJoueur;
                 partie.CouleurServeur = couleurServeur;
 
@@ -201,8 +203,7 @@ namespace BattleShip_client
                 Console.Clear();
             }
         }
-
-
+        
 
         public static int SaisieTaille(string prompt)
         {
