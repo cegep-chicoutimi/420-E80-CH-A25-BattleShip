@@ -27,6 +27,7 @@ namespace BattleShip_client
         #region Connexion Réseau
         public static void DemandeInfoServeur()
         {
+            // Demande de l'adresse du serveur
             do
             {
                 Console.Write("Entrer l'adresse où vous connecter : ");
@@ -42,6 +43,20 @@ namespace BattleShip_client
             Console.Clear();
             ConsoleUI.WriteWaiting($"Connexion à l'adresse {_adresseIp} en cours...");
 
+            // Demande si le joueur veut jouer contre l'IA
+            bool jouerContreIA = false;
+            string choixIA;
+            do
+            {
+                Console.Write("Voulez-vous jouer contre l'ordinateur (IA) ? (o/n) : ");
+                choixIA = Console.ReadLine()?.Trim().ToLower() ?? "";
+                if (choixIA != "o" && choixIA != "n")
+                    ConsoleUI.WriteWarning("Entrez 'o' pour oui ou 'n' pour non !");
+            } while (choixIA != "o" && choixIA != "n");
+
+            jouerContreIA = choixIA == "o";
+
+
             try
             {
                 IPAddress ipAddress = IPAddress.Parse(_adresseIp);
@@ -53,13 +68,19 @@ namespace BattleShip_client
                 ConsoleUI.WriteSuccessful("Connecté au serveur !");
                 (couleurJoueur, couleurServeur) = ConfigManager.LoadOrChooseColors();
 
-                JouerPartie(new SocketHelper(sender));
+                SocketHelper socketHelper = new SocketHelper(sender);
+
+                // Envoyer le booléen au serveur : "True" = IA, "False" = humain
+                socketHelper.Send(jouerContreIA.ToString());
+
+                JouerPartie(socketHelper);
             }
             catch (Exception e)
             {
                 ConsoleUI.WriteWarning($"Erreur de connexion : {e.Message}");
             }
         }
+
 
         public static bool ValiderAdresseIp(string adresse)
         {
@@ -95,7 +116,7 @@ namespace BattleShip_client
 
                 partie.StartGame(colonnes, lignes);
                 bool win = false;
-                bool monTour = true; // le client commence
+                bool monTour = true;
 
                 while (!win)
                 {

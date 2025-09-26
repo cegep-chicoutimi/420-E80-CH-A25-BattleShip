@@ -55,5 +55,15 @@ namespace BattleShipLibrary
 
             Console.ResetColor();
         }
+
+        public string GetCoordString(int col, int row)
+        {
+            if (col < 0 || col >= Colonnes || row < 0 || row >= Lignes)
+                throw new ArgumentOutOfRangeException("Coordonnée hors grille.");
+
+            char lettre = (char)('A' + col);
+            return $"{lettre}{row + 1}";
+        }
+
     }
 }

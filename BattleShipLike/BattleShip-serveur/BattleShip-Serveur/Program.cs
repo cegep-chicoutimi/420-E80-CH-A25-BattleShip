@@ -2,6 +2,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Collections.Generic;
 
 namespace BattleShip_server
 {
@@ -19,7 +20,6 @@ namespace BattleShip_server
             StartServer();
         }
 
-        #region Serveur
         private static void StartServer()
         {
             try
@@ -31,7 +31,7 @@ namespace BattleShip_server
                 listener.Bind(localEP);
                 listener.Listen(1);
 
-                (couleurServeur, couleurJoueur) = ConfigManager.LoadOrChooseColors(); // inverse par rapport au client
+                (couleurServeur, couleurJoueur) = ConfigManager.LoadOrChooseColors();
 
                 while (true)
                 {
@@ -41,8 +41,13 @@ namespace BattleShip_server
 
                     SocketHelper network = new SocketHelper(socket);
 
+                    // **Lecture du choix IA/humain**
+                    string choixIAString = network.Receive();
+                    bool jouerContreIA = bool.Parse(choixIAString);
+                    Console.WriteLine($"Client a choisi de jouer contre l'IA : {jouerContreIA}");
+
                     _rematch = true;
-                    JouerPartie(network);
+                    JouerPartie(network, jouerContreIA);
 
                     ConsoleUI.WriteWaiting("Client déconnecté. En attente d'un nouveau client...");
                 }
@@ -53,10 +58,7 @@ namespace BattleShip_server
             }
         }
 
-        #endregion
-
-        #region Partie
-        private static void JouerPartie(SocketHelper network)
+        private static void JouerPartie(SocketHelper network, bool jouerContreIA)
         {
             while (_rematch)
             {
@@ -77,88 +79,159 @@ namespace BattleShip_server
                 partie.StartGame(colonnes, lignes);
 
                 bool win = false;
-                bool monTour = false; // serveur commence après le client
+                bool monTour = false;
+
+                IA ia = null;
+                if (jouerContreIA)
+                    ia = new IA(partie);
 
                 while (!win)
                 {
-                    if (monTour)
+                    if (!jouerContreIA)
                     {
-                        bool continuer = true;
-                        while (continuer && !win)
+                        if (monTour)
                         {
-                            string coords = ConsoleUI.AskForCoordinate(partie, "Choisissez la case à toucher : ");
-                            network.Send(partie.SerializeData(coords));
-
-                            bool touche = partie.DeserializeBoolData(network.Receive());
-                            var (col, row) = partie.Positions[coords];
-                            Console.Clear();
-
-                            if (touche)
+                            bool continuer = true;
+                            while (continuer && !win)
                             {
-                                hits++;
-                                ConsoleUI.WriteSuccessful("Bateau touché ! Vous rejouez !");
-                            }
-                            else
-                            {
-                                ConsoleUI.WriteWaiting("Bateau non touché. À l’adversaire !");
-                                continuer = false;
-                            }
+                                string coords = ConsoleUI.AskForCoordinate(partie, "Choisissez la case à toucher : ");
+                                network.Send(partie.SerializeData(coords));
 
-                            partie.AfficherMaGrille();
-                            partie.AfficherEnemyGrille();
-                            Console.WriteLine($"Vous avez touché {hits} fois / {nbTotalCases}");
+                                bool touche = partie.DeserializeBoolData(network.Receive());
+                                Console.Clear();
 
-                            network.Send(partie.SerializeData(hits == nbTotalCases ? "0" : "1"));
+                                if (touche)
+                                {
+                                    hits++;
+                                    ConsoleUI.WriteSuccessful("Bateau touché ! Vous rejouez !");
+                                }
+                                else
+                                {
+                                    ConsoleUI.WriteWaiting("Bateau non touché. À l’adversaire !");
+                                    continuer = false;
+                                    monTour = false;
+                                }
 
-                            if (hits == nbTotalCases)
-                            {
-                                ConsoleUI.WriteSuccessful("Vous avez gagné !");
-                                win = true;
-                                break;
+                                partie.AfficherMaGrille();
+                                partie.AfficherEnemyGrille();
+                                Console.WriteLine($"Vous avez touché {hits} fois / {nbTotalCases}");
+
+                                network.Send(partie.SerializeData(hits == nbTotalCases ? "0" : "1"));
+
+                                if (hits == nbTotalCases)
+                                {
+                                    ConsoleUI.WriteSuccessful("Vous avez gagné !");
+                                    win = true;
+                                    break;
+                                }
                             }
                         }
-                        monTour = !monTour;
+                        else
+                        {
+                            bool advContinuer = true;
+                            while (advContinuer && !win)
+                            {
+                                string coordRecus = partie.DeserializeStringData(network.Receive());
+                                string resultSerialized = partie.IsTouched(coordRecus);
+                                network.Send(resultSerialized);
+
+                                bool clientATouche = partie.DeserializeBoolData(resultSerialized);
+
+                                string confirmation = partie.DeserializeStringData(network.Receive());
+                                if (confirmation != "1")
+                                {
+                                    win = true;
+                                    ConsoleUI.WriteWarning("Vous avez perdu !");
+                                    break;
+                                }
+
+                                if (!clientATouche)
+                                {
+                                    advContinuer = false;
+                                    monTour = true; // passe le tour au joueur
+                                }
+                            }
+                        }
                     }
                     else
                     {
-                        bool advContinuer = true;
-                        while (advContinuer && !win)
+                        if (monTour)
                         {
-                            string coordRecus = partie.DeserializeStringData(network.Receive());
-                            string resultSerialized = partie.IsTouched(coordRecus);
-                            network.Send(resultSerialized);
-
-                            bool clientATouche = partie.DeserializeBoolData(resultSerialized);
-
-                            string confirmation = partie.DeserializeStringData(network.Receive());
-                            if (confirmation != "1")
+                            // Tour IA
+                            bool continuer = true;
+                            while (continuer && !win)
                             {
-                                win = true;
-                                ConsoleUI.WriteWarning("Vous avez perdu !");
-                                break;
+                                // IA choisit sa case
+                                string coords = ia.NextMove();
+                                ConsoleUI.WriteWaiting($"L'IA a tiré sur {coords}");
+                                network.Send(partie.SerializeData(coords));
+
+                                bool touche = partie.DeserializeBoolData(network.Receive());
+                                Console.Clear();
+
+                                if (touche)
+                                {
+                                    hits++;
+                                    ConsoleUI.WriteSuccessful("Bateau touché ! Vous rejouez !");
+                                }
+                                else
+                                {
+                                    ConsoleUI.WriteWaiting("Bateau non touché. À l’adversaire !");
+                                    continuer = false;
+                                    monTour = false;
+                                }
+
+                                partie.AfficherMaGrille();
+                                partie.AfficherEnemyGrille();
+                                Console.WriteLine($"Vous avez touché {hits} fois / {nbTotalCases}");
+
+                                network.Send(partie.SerializeData(hits == nbTotalCases ? "0" : "1"));
+
+                                if (hits == nbTotalCases)
+                                {
+                                    ConsoleUI.WriteSuccessful("Vous avez gagné !");
+                                    win = true;
+                                    break;
+                                }
                             }
-
-                            if (!clientATouche)
+                        }
+                        else
+                        {
+                            // Tour client (inchangé)
+                            bool advContinuer = true;
+                            while (advContinuer && !win)
                             {
-                                advContinuer = false;
-                                monTour = true;
+                                string coordRecus = partie.DeserializeStringData(network.Receive());
+                                string resultSerialized = partie.IsTouched(coordRecus);
+                                network.Send(resultSerialized);
+
+                                bool clientATouche = partie.DeserializeBoolData(resultSerialized);
+
+                                string confirmation = partie.DeserializeStringData(network.Receive());
+                                if (confirmation != "1")
+                                {
+                                    win = true;
+                                    ConsoleUI.WriteWarning("Vous avez perdu !");
+                                    break;
+                                }
+
+                                if (!clientATouche)
+                                {
+                                    advContinuer = false;
+                                    monTour = true; // Passe le tour à l’IA
+                                }
                             }
                         }
                     }
                 }
 
+                // Réception de la question du serveur pour rematch
                 network.Send(partie.SerializeData("Voulez-vous une revanche (o/n)"));
-
-                // On attend la réponse du client
                 string reponseClient = partie.DeserializeStringData(network.Receive());
-
-                // Si le client dit oui, on rejoue
-                if (reponseClient == "o") _rematch = true;
-                else _rematch = false;
+                _rematch = reponseClient == "o";
 
                 Console.Clear();
             }
         }
-        #endregion
     }
 }
