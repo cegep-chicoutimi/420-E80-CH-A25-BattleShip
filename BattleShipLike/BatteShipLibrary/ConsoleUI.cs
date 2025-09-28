@@ -31,17 +31,6 @@ namespace BattleShipLibrary
             return n;
         }
 
-        public static string AskForCoordinate(BattleShip partie, string prompt)
-        {
-            string coord;
-            do
-            {
-                Console.Write(prompt);
-                coord = Console.ReadLine()?.ToUpper();
-            } while (coord == null || !partie.Positions.ContainsKey(coord));
-            return coord;
-        }
-
         public static ConsoleColor ChoisirCouleur(string nomJoueur)
         {
             Console.WriteLine($"Choisissez une couleur pour {nomJoueur} :");

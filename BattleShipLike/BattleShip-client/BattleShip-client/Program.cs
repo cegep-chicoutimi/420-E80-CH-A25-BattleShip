@@ -125,11 +125,13 @@ namespace BattleShip_client
                         bool continuer = true;
                         while (continuer && !win)
                         {
-                            string coords = ConsoleUI.AskForCoordinate(partie, "Choisissez la case à toucher : ");
+                            string coords = partie.ChoisirCase("Choisissez la case à toucher : ", false);
                             network.Send(partie.SerializeData(coords));
 
                             bool touche = partie.DeserializeBoolData(network.Receive());
                             var (col, row) = partie.Positions[coords];
+                            partie.EnemyGrille.Cells[col, row] = touche ? "B" : "X"; // B = touché, X = manqué
+
                             Console.Clear();
 
                             if (touche)

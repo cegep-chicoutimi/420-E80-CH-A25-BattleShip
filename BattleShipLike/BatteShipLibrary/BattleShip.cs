@@ -42,7 +42,7 @@ namespace BattleShipLibrary
                 bool placé = false;
                 do
                 {
-                    string pos = ChoisirCase($"Case d'ancrage bateau taille {bateau.Forme.Count}:");
+                    string pos = ChoisirCase($"Case d'ancrage bateau taille {bateau.Forme.Count}:", true);
                     var (col, row) = Positions[pos];
 
                     if (!bateau.Placer(col, row, Colonnes, Lignes))
@@ -66,7 +66,7 @@ namespace BattleShipLibrary
             }
         }
 
-        public string ChoisirCase(string prompt)
+        public string ChoisirCase(string prompt, bool placement)
         {
             string c;
             do
@@ -82,12 +82,11 @@ namespace BattleShipLibrary
                 else if (CasesTouchees.Contains(c))
                 {
                     ConsoleUI.WriteWarning("Cette case a déjà été touchée ! Considérée comme manquée.");
-                    CasesTouchees.Add(c); // On l'ajoute pour qu'elle reste "touchée"
-                    return c; // On retourne la coordonnée pour qu'elle soit traitée comme un tir manqué
+                    c = null;
                 }
             } while (c == null);
 
-            CasesTouchees.Add(c);
+            //if (!placement) CasesTouchees.Add(c);
             return c;
         }
 
@@ -95,9 +94,11 @@ namespace BattleShipLibrary
         public string IsTouched(string pos)
         {
             var (col, row) = Positions[pos];
-            bool touché = MesBateaux.Any(b => b.Positions.Contains((col, row)));
-            return SerializeData(touché);
+            bool touche = MesBateaux.Any(b => b.Positions.Contains((col, row)));
+
+            return SerializeData(touche);
         }
+
 
         public void AfficherMaGrille() => MaGrille.Afficher(CouleurJoueur);
         public void AfficherEnemyGrille() => EnemyGrille.Afficher(CouleurServeur);

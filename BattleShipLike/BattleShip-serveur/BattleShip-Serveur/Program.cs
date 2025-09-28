@@ -41,7 +41,7 @@ namespace BattleShip_server
 
                     SocketHelper network = new SocketHelper(socket);
 
-                    // **Lecture du choix IA/humain**
+                    // Lecture du choix IA/humain
                     string choixIAString = network.Receive();
                     bool jouerContreIA = bool.Parse(choixIAString);
                     Console.WriteLine($"Client a choisi de jouer contre l'IA : {jouerContreIA}");
@@ -94,10 +94,14 @@ namespace BattleShip_server
                             bool continuer = true;
                             while (continuer && !win)
                             {
-                                string coords = ConsoleUI.AskForCoordinate(partie, "Choisissez la case à toucher : ");
+                                string coords = partie.ChoisirCase("Choisissez la case à toucher : ", false);
+
                                 network.Send(partie.SerializeData(coords));
 
                                 bool touche = partie.DeserializeBoolData(network.Receive());
+
+                                var (col, row) = partie.Positions[coords];
+                                partie.EnemyGrille.Cells[col, row] = touche ? "B" : "X"; // B = touché, X = manqué
                                 Console.Clear();
 
                                 if (touche)
@@ -163,10 +167,12 @@ namespace BattleShip_server
                             {
                                 // IA choisit sa case
                                 string coords = ia.NextMove();
-                                ConsoleUI.WriteWaiting($"L'IA a tiré sur {coords}");
                                 network.Send(partie.SerializeData(coords));
 
                                 bool touche = partie.DeserializeBoolData(network.Receive());
+                                var (col, row) = partie.Positions[coords];
+                                partie.EnemyGrille.Cells[col, row] = touche ? "B" : "X"; // B = touché, X = manqué
+
                                 Console.Clear();
 
                                 if (touche)
@@ -183,6 +189,7 @@ namespace BattleShip_server
 
                                 partie.AfficherMaGrille();
                                 partie.AfficherEnemyGrille();
+                                ConsoleUI.WriteWaiting($"L'IA a tiré sur {coords}");
                                 Console.WriteLine($"Vous avez touché {hits} fois / {nbTotalCases}");
 
                                 network.Send(partie.SerializeData(hits == nbTotalCases ? "0" : "1"));
